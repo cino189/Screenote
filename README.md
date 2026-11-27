@@ -87,8 +87,8 @@ grim - | screenote -
 
 ## Binding to a Shortcut on GNOME Wayland
 
-1. Install with Cargo (`~/.cargo/bin` is in `$PATH`):
+1. Find the install location for your environment (`~/.cargo/bin` is the default):
    ```bash
-   cargo install --path .
+   which screenote
    ```
-2. Open **Settings → Keyboard → View and Customize Shortcuts → Custom Shortcuts** and add a shortcut pointing to `/home/$USER/.cargo/bin/screenote` (for example bound to `Super+Shift+S` or `Shift+Print`).
+2. Open **Settings → Keyboard → View and Customize Shortcuts → Custom Shortcuts** and add a shortcut pointing to the screenote install location (e.g. `/home/$USER/.cargo/bin/screenote`).
