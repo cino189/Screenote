@@ -327,7 +327,7 @@ impl Renderer {
             let attrs = Attrs::new()
                 .family(Family::SansSerif)
                 .weight(Weight::SEMIBOLD);
-            borrowed.set_text(text, &attrs, Shaping::Advanced);
+            borrowed.set_text(text, &attrs, Shaping::Advanced, None);
             borrowed.shape_until_scroll(true);
         }
 

@@ -436,15 +436,16 @@ impl ScreenoteApp {
         }
     }
 
-    fn draw_top_toolbar(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::top("screenote_toolbar")
+    fn draw_top_toolbar(&mut self, root_ui: &mut egui::Ui, ctx: &egui::Context) {
+        egui::Panel::top("screenote_toolbar")
+            .show_separator_line(false)
             .frame(
                 egui::Frame::new()
                     .fill(Color32::from_rgb(24, 26, 32))
                     .inner_margin(egui::Margin::symmetric(12, 8))
                     .stroke(Stroke::new(1.0_f32, Color32::from_rgb(42, 46, 58))),
             )
-            .show(ctx, |ui| {
+            .show(root_ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     ui.spacing_mut().item_spacing = Vec2::new(6.0, 6.0);
                     ui.set_row_height(24.0);
@@ -776,15 +777,16 @@ impl ScreenoteApp {
         }
     }
 
-    fn draw_bottom_bar(&mut self, ctx: &egui::Context) {
-        egui::TopBottomPanel::bottom("screenote_statusbar")
+    fn draw_bottom_bar(&mut self, root_ui: &mut egui::Ui) {
+        egui::Panel::bottom("screenote_statusbar")
+            .show_separator_line(false)
             .frame(
                 egui::Frame::new()
                     .fill(Color32::from_rgb(20, 22, 27))
                     .inner_margin(egui::Margin::symmetric(12, 4))
                     .stroke(Stroke::new(1.0_f32, Color32::from_rgb(36, 40, 50))),
             )
-            .show(ctx, |ui| {
+            .show(root_ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     let (out_w, out_h) = if let Some(c) = self.crop {
                         (c.width().round() as u32, c.height().round() as u32)
@@ -847,10 +849,10 @@ impl ScreenoteApp {
             });
     }
 
-    fn draw_canvas(&mut self, ctx: &egui::Context) {
+    fn draw_canvas(&mut self, root_ui: &mut egui::Ui, ctx: &egui::Context) {
         egui::CentralPanel::default()
             .frame(egui::Frame::new().fill(Color32::from_rgb(15, 17, 22)))
-            .show(ctx, |ui| {
+            .show(root_ui, |ui| {
                 let avail = ui.available_rect_before_wrap();
                 let img_w = self.base_image.width() as f32;
                 let img_h = self.base_image.height() as f32;
@@ -1427,7 +1429,7 @@ impl ScreenoteApp {
             }
         });
 
-        let area_resp = egui::Area::new(egui::Id::new("screenote_inline_text"))
+        let area_resp = egui::Area::new(egui::Id::unique("screenote_inline_text"))
             .fixed_pos(anchor)
             .order(egui::Order::Foreground)
             .show(ctx, |ui| {
@@ -1475,11 +1477,12 @@ impl ScreenoteApp {
 }
 
 impl eframe::App for ScreenoteApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        self.handle_shortcuts(ctx);
-        self.draw_top_toolbar(ctx);
-        self.draw_bottom_bar(ctx);
-        self.draw_canvas(ctx);
+    fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
+        let ctx = ui.ctx().clone();
+        self.handle_shortcuts(&ctx);
+        self.draw_top_toolbar(ui, &ctx);
+        self.draw_bottom_bar(ui);
+        self.draw_canvas(ui, &ctx);
     }
 }
 

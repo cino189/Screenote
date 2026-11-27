@@ -60,7 +60,9 @@ async fn capture_via_portal(interactive: bool) -> Result<CaptureOutcome> {
     };
 
     let uri = response.uri();
-    let file_path = uri
+    let parsed_url =
+        url::Url::parse(uri.as_str()).with_context(|| format!("Invalid portal URI: {uri}"))?;
+    let file_path = parsed_url
         .to_file_path()
         .map_err(|()| anyhow::anyhow!("Portal returned a non-file URI: {uri}"))?;
 
@@ -132,7 +134,9 @@ pub fn save_file_dialog(suggested_name: &str, initial_dir: Option<&Path>) -> Res
             return Ok(None);
         };
 
-        let mut path = uri
+        let parsed_url =
+            url::Url::parse(uri.as_str()).with_context(|| format!("Invalid portal URI: {uri}"))?;
+        let mut path = parsed_url
             .to_file_path()
             .map_err(|()| anyhow::anyhow!("Selected save location is not a local path: {uri}"))?;
 
