@@ -16,12 +16,38 @@ Works natively across **GNOME, KDE Plasma, Sway, Hyprland, and COSMIC** via `xdg
 - **Full-Resolution Export**: Annotations are stored as resolution-independent vectors and rendered onto the original screenshot resolution with `tiny-skia` and `cosmic-text`.
 - **Persistent Wayland Clipboard**: `Copy` (`Ctrl+C`) and `Copy & Close` (`Ctrl+Enter`) keep `image/png` alive on the Wayland clipboard even after the Screenote window closes.
 
+## Compatibility & Disclaimer
+
+> **Disclaimer:** Screenote has **only been tested on a single Fedora Linux 45 (Workstation Edition) machine** running GNOME on Wayland. While it uses standard `xdg-desktop-portal` and Wayland protocols, other Linux distributions and compositors (KDE Plasma, Sway, Hyprland, COSMIC, etc.) have not been tested.
+
+### Tested Environment
+
+- **OS:** Fedora Linux 45 (Workstation Edition), `x86_64`
+- **Kernel:** `7.3.4-300.fc45.x86_64`
+- **Desktop / Session:** GNOME Shell `51.1` on Wayland (`XDG_SESSION_TYPE=wayland`)
+- **Rust Toolchain:** `rustc 1.100.0` / `cargo 1.100.0` (`edition = "2024"`)
+
+### Required Dependencies
+
+- **Build-time:**
+  - Rust & Cargo supporting Rust 2024 edition (`rustc` ≥ 1.85; tested with `1.100.0`). No `-devel` C header packages are required.
+- **Runtime:**
+  - `xdg-desktop-portal` (tested: `1.22.1`) and a portal backend implementing `Screenshot` and `FileChooser` (tested: `xdg-desktop-portal-gnome 51.0`)
+  - Wayland client, XKB, and EGL runtime libraries: `libwayland-client` (`1.26.0`), `libxkbcommon` (`1.13.1`), `mesa-libEGL` (`26.2.7`)
+  - `wl-clipboard` (`wl-copy`, tested: `2.3.0`) — recommended on GNOME/Mutter for clipboard persistence; falls back to the built-in `wl-clipboard-rs` worker on `zwlr_data_control` compositors
+  - System fonts installed (used by `cosmic-text` for text annotations)
+
 ## Install & Run
 
 Screenote is a single self-contained binary (no external assets, schemas, or `-devel` C headers required) and installs directly into `~/.cargo/bin`:
 
 ```bash
+# Install directly from the Git repository
+cargo install --git https://github.com/cino189/Screenote
+
+# Or from a local checkout
 cargo install --path .
+
 screenote
 ```
 
