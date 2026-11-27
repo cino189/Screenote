@@ -8,7 +8,9 @@ use tiny_skia::{
     Stroke, Transform,
 };
 
-use crate::annotation::{Annotation, AnnotationKind, ColorRgba, Point, RectBounds};
+use crate::annotation::{
+    Annotation, AnnotationKind, ColorRgba, Point, RectBounds, text_backdrop_padding,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct ArrowGeometry {
@@ -340,12 +342,17 @@ impl Renderer {
         }
 
         if backdrop && max_w > 0.0 && max_y > 0.0 {
-            let pad_x = (size * 0.35).max(6.0);
-            let pad_y = (size * 0.22).max(4.0);
-            let bg_color = if luminance(color) < 0.35 {
-                ColorRgba::rgba(248, 250, 252, 220)
+            let (pad_x, pad_y) = text_backdrop_padding(size);
+            let is_dark_text = luminance(color) < 0.35;
+            let bg_color = if is_dark_text {
+                ColorRgba::rgba(248, 250, 252, 235)
             } else {
-                ColorRgba::rgba(15, 23, 42, 215)
+                ColorRgba::rgba(12, 16, 26, 232)
+            };
+            let border_color = if is_dark_text {
+                ColorRgba::rgba(15, 23, 42, 65)
+            } else {
+                ColorRgba::rgba(255, 255, 255, 58)
             };
             if let Some(bg_rect) = Rect::from_ltrb(
                 pos.x - pad_x,
@@ -356,6 +363,15 @@ impl Renderer {
                 let path = rounded_rect_path(bg_rect, (size * 0.25).clamp(4.0, 10.0));
                 let paint = make_paint(bg_color);
                 pixmap.fill_path(&path, &paint, FillRule::Winding, Transform::identity(), None);
+                let border_paint = make_paint(border_color);
+                let border_stroke = make_stroke(1.0, LineCap::Round, LineJoin::Round);
+                pixmap.stroke_path(
+                    &path,
+                    &border_paint,
+                    &border_stroke,
+                    Transform::identity(),
+                    None,
+                );
             }
         }
 
@@ -729,5 +745,41 @@ mod tests {
         assert_eq!(decoded.dimensions(), (100, 80));
         // Upper center of filled green ellipse (at 60,45 in base -> 50,35 in cropped) should be green
         assert_eq!(decoded.get_pixel(50, 35), &Rgba([34, 197, 94, 255]));
+    }
+
+    #[test]
+    fn text_backdrop_toggle_changes_rendered_background() {
+        let img = RgbaImage::from_pixel(160, 80, Rgba([180, 180, 190, 255]));
+        let mut renderer = Renderer::new();
+
+        let without_backdrop = Annotation {
+            id: 1,
+            kind: AnnotationKind::Text {
+                pos: Point::new(30.0, 25.0),
+                text: "Backdrop test".to_string(),
+                color: ColorRgba::rgb(236, 72, 153),
+                font_size: 20.0,
+                backdrop: false,
+            },
+        };
+        let mut with_backdrop = without_backdrop.clone();
+        if let AnnotationKind::Text { backdrop, .. } = &mut with_backdrop.kind {
+            *backdrop = true;
+        }
+
+        let out_plain = renderer
+            .render(&img, &[without_backdrop], None)
+            .expect("plain text render succeeds");
+        let out_pill = renderer
+            .render(&img, &[with_backdrop], None)
+            .expect("backdrop text render succeeds");
+
+        // Sample inside the left padding region (x = 26, y = 32): untouched when backdrop=false, darkened when backdrop=true
+        assert_eq!(out_plain.get_pixel(26, 32), &Rgba([180, 180, 190, 255]));
+        assert!(
+            out_pill.get_pixel(26, 32)[0] < 60,
+            "expected dark pill padding pixel when backdrop=true, got {:?}",
+            out_pill.get_pixel(26, 32)
+        );
     }
 }

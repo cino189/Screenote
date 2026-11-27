@@ -128,6 +128,41 @@ impl Tool {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ShapeKind {
+    Arrow,
+    Rectangle,
+    Ellipse,
+    Pixelate,
+}
+
+impl ShapeKind {
+    pub const ALL: [Self; 4] = [
+        Self::Arrow,
+        Self::Rectangle,
+        Self::Ellipse,
+        Self::Pixelate,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Arrow => "Arrow",
+            Self::Rectangle => "Rectangle",
+            Self::Ellipse => "Ellipse",
+            Self::Pixelate => "Pixelate",
+        }
+    }
+
+    pub fn corresponding_tool(self) -> Tool {
+        match self {
+            Self::Arrow => Tool::Arrow,
+            Self::Rectangle => Tool::Rectangle,
+            Self::Ellipse => Tool::Ellipse,
+            Self::Pixelate => Tool::Pixelate,
+        }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Annotation {
     pub id: u64,
@@ -171,8 +206,13 @@ pub enum AnnotationKind {
     },
 }
 
+pub fn text_backdrop_padding(font_size: f32) -> (f32, f32) {
+    let size = font_size.max(8.0);
+    ((size * 0.35).max(6.0), (size * 0.22).max(4.0))
+}
+
 impl Annotation {
-    pub fn bounds(&self) -> RectBounds {
+    pub fn bounds_with_text_size(&self, measured_text: Option<(f32, f32)>) -> RectBounds {
         match &self.kind {
             AnnotationKind::Arrow { start, end, .. }
             | AnnotationKind::Rectangle { start, end, .. }
@@ -182,24 +222,45 @@ impl Annotation {
                 pos,
                 text,
                 font_size,
+                backdrop,
                 ..
             } => {
-                let lines: Vec<&str> = text.lines().collect();
-                let line_count = lines.len().max(1) as f32;
-                let max_chars = lines.iter().map(|l| l.chars().count()).max().unwrap_or(1) as f32;
-                let approx_w = (max_chars * (*font_size * 0.58)).max(*font_size);
-                let approx_h = line_count * (*font_size * 1.3);
-                RectBounds {
-                    min_x: pos.x - 4.0,
-                    min_y: pos.y - 4.0,
-                    max_x: pos.x + approx_w + 8.0,
-                    max_y: pos.y + approx_h + 8.0,
+                let size = font_size.max(8.0);
+                let (text_w, text_h) = measured_text.unwrap_or_else(|| {
+                    let lines: Vec<&str> = text.lines().collect();
+                    let line_count = lines.len().max(1) as f32;
+                    let max_chars =
+                        lines.iter().map(|l| l.chars().count()).max().unwrap_or(1) as f32;
+                    let w = (max_chars * (size * 0.48)).max(size * 0.5);
+                    let h = line_count * (size * 1.22);
+                    (w, h)
+                });
+                if *backdrop {
+                    let (pad_x, pad_y) = text_backdrop_padding(size);
+                    RectBounds {
+                        min_x: pos.x - pad_x,
+                        min_y: pos.y - pad_y,
+                        max_x: pos.x + text_w + pad_x,
+                        max_y: pos.y + text_h + pad_y,
+                    }
+                } else {
+                    RectBounds {
+                        min_x: pos.x - 2.0,
+                        min_y: pos.y - 2.0,
+                        max_x: pos.x + text_w + 2.0,
+                        max_y: pos.y + text_h + 2.0,
+                    }
                 }
             }
         }
     }
 
-    pub fn hit_test(&self, pt: Point, base_tolerance: f32) -> bool {
+    pub fn hit_test_with_bounds(
+        &self,
+        pt: Point,
+        base_tolerance: f32,
+        bounds: RectBounds,
+    ) -> bool {
         match &self.kind {
             AnnotationKind::Arrow {
                 start,
@@ -265,7 +326,7 @@ impl Annotation {
                 }
             }
             AnnotationKind::Pixelate { .. } | AnnotationKind::Text { .. } => {
-                self.bounds().contains(pt, base_tolerance)
+                bounds.contains(pt, base_tolerance * 0.5)
             }
         }
     }
@@ -288,54 +349,32 @@ impl Annotation {
         }
     }
 
-    pub fn handles(&self) -> Vec<Point> {
+    pub fn handles_with_bounds(&self, bounds: RectBounds) -> Vec<Point> {
         match &self.kind {
             AnnotationKind::Arrow { start, end, .. } => {
                 vec![*start, *end]
             }
-            AnnotationKind::Rectangle { start, end, .. }
-            | AnnotationKind::Ellipse { start, end, .. }
-            | AnnotationKind::Pixelate { start, end, .. } => {
-                let r = RectBounds::from_points(*start, *end);
+            AnnotationKind::Rectangle { .. }
+            | AnnotationKind::Ellipse { .. }
+            | AnnotationKind::Pixelate { .. }
+            | AnnotationKind::Text { .. } => {
                 vec![
-                    Point::new(r.min_x, r.min_y),
-                    Point::new(r.max_x, r.min_y),
-                    Point::new(r.max_x, r.max_y),
-                    Point::new(r.min_x, r.max_y),
+                    Point::new(bounds.min_x, bounds.min_y),
+                    Point::new(bounds.max_x, bounds.min_y),
+                    Point::new(bounds.max_x, bounds.max_y),
+                    Point::new(bounds.min_x, bounds.max_y),
                 ]
             }
-            AnnotationKind::Text { pos, .. } => vec![*pos],
         }
     }
 
-    pub fn set_handle(&mut self, index: usize, pt: Point) {
-        match &mut self.kind {
-            AnnotationKind::Arrow { start, end, .. } => {
-                if index == 0 {
-                    *start = pt;
-                } else if index == 1 {
-                    *end = pt;
-                }
-            }
-            AnnotationKind::Rectangle { start, end, .. }
-            | AnnotationKind::Ellipse { start, end, .. }
-            | AnnotationKind::Pixelate { start, end, .. } => {
-                let r = RectBounds::from_points(*start, *end);
-                let (new_a, new_b) = match index {
-                    0 => (pt, Point::new(r.max_x, r.max_y)),
-                    1 => (Point::new(r.min_x, pt.y), Point::new(pt.x, r.max_y)),
-                    2 => (Point::new(r.min_x, r.min_y), pt),
-                    3 => (Point::new(pt.x, r.min_y), Point::new(r.max_x, pt.y)),
-                    _ => return,
-                };
-                *start = new_a;
-                *end = new_b;
-            }
-            AnnotationKind::Text { pos, .. } => {
-                if index == 0 {
-                    *pos = pt;
-                }
-            }
+    pub fn color(&self) -> Option<ColorRgba> {
+        match &self.kind {
+            AnnotationKind::Arrow { color, .. }
+            | AnnotationKind::Rectangle { color, .. }
+            | AnnotationKind::Ellipse { color, .. }
+            | AnnotationKind::Text { color, .. } => Some(*color),
+            AnnotationKind::Pixelate { .. } => None,
         }
     }
 
@@ -354,6 +393,90 @@ impl Annotation {
             }
             AnnotationKind::Pixelate { .. } => false,
         }
+    }
+
+    pub fn shape_kind(&self) -> Option<ShapeKind> {
+        match &self.kind {
+            AnnotationKind::Arrow { .. } => Some(ShapeKind::Arrow),
+            AnnotationKind::Rectangle { .. } => Some(ShapeKind::Rectangle),
+            AnnotationKind::Ellipse { .. } => Some(ShapeKind::Ellipse),
+            AnnotationKind::Pixelate { .. } => Some(ShapeKind::Pixelate),
+            AnnotationKind::Text { .. } => None,
+        }
+    }
+
+    pub fn convert_shape(
+        &mut self,
+        target: ShapeKind,
+        default_color: ColorRgba,
+        default_stroke: f32,
+        default_filled: bool,
+        default_block_size: u32,
+        default_blur: bool,
+    ) -> bool {
+        if self.shape_kind() == Some(target) {
+            return false;
+        }
+        let (start, end, cur_color, cur_stroke, cur_filled) = match &self.kind {
+            AnnotationKind::Arrow {
+                start,
+                end,
+                color,
+                stroke_width,
+            } => (*start, *end, *color, *stroke_width, default_filled),
+            AnnotationKind::Rectangle {
+                start,
+                end,
+                color,
+                stroke_width,
+                filled,
+            }
+            | AnnotationKind::Ellipse {
+                start,
+                end,
+                color,
+                stroke_width,
+                filled,
+            } => (*start, *end, *color, *stroke_width, *filled),
+            AnnotationKind::Pixelate { start, end, .. } => (
+                *start,
+                *end,
+                default_color,
+                default_stroke,
+                default_filled,
+            ),
+            AnnotationKind::Text { .. } => return false,
+        };
+
+        self.kind = match target {
+            ShapeKind::Arrow => AnnotationKind::Arrow {
+                start,
+                end,
+                color: cur_color,
+                stroke_width: cur_stroke,
+            },
+            ShapeKind::Rectangle => AnnotationKind::Rectangle {
+                start,
+                end,
+                color: cur_color,
+                stroke_width: cur_stroke,
+                filled: cur_filled,
+            },
+            ShapeKind::Ellipse => AnnotationKind::Ellipse {
+                start,
+                end,
+                color: cur_color,
+                stroke_width: cur_stroke,
+                filled: cur_filled,
+            },
+            ShapeKind::Pixelate => AnnotationKind::Pixelate {
+                start,
+                end,
+                block_size: default_block_size,
+                blur: default_blur,
+            },
+        };
+        true
     }
 }
 
@@ -462,8 +585,9 @@ mod tests {
             },
         };
         // Edge hit succeeds, center of unfilled rectangle does not hit
-        assert!(rect_ann.hit_test(Point::new(10.0, 50.0), 4.0));
-        assert!(!rect_ann.hit_test(Point::new(60.0, 50.0), 4.0));
+        let b = rect_ann.bounds_with_text_size(None);
+        assert!(rect_ann.hit_test_with_bounds(Point::new(10.0, 50.0), 4.0, b));
+        assert!(!rect_ann.hit_test_with_bounds(Point::new(60.0, 50.0), 4.0, b));
 
         let mut history = History::default();
         let empty = DocumentSnapshot::default();
@@ -478,5 +602,61 @@ mod tests {
         assert_eq!(undone, empty);
         let redone = history.redo(undone).expect("redo available");
         assert_eq!(redone, with_one);
+    }
+
+    #[test]
+    fn text_bounds_and_shape_conversion_work_accurately() {
+        let mut ann = Annotation {
+            id: 7,
+            kind: AnnotationKind::Text {
+                pos: Point::new(50.0, 40.0),
+                text: "larger text".to_string(),
+                color: PALETTE[6].1,
+                font_size: 24.0,
+                backdrop: true,
+            },
+        };
+        let (pad_x, pad_y) = text_backdrop_padding(24.0);
+        let with_bg = ann.bounds_with_text_size(Some((110.0, 28.0)));
+        assert!((with_bg.min_x - (50.0 - pad_x)).abs() < 1e-4);
+        assert!((with_bg.max_x - (50.0 + 110.0 + pad_x)).abs() < 1e-4);
+        assert!((with_bg.min_y - (40.0 - pad_y)).abs() < 1e-4);
+        assert!((with_bg.max_y - (40.0 + 28.0 + pad_y)).abs() < 1e-4);
+        assert_eq!(ann.handles_with_bounds(with_bg).len(), 4);
+
+        if let AnnotationKind::Text { backdrop, .. } = &mut ann.kind {
+            *backdrop = false;
+        }
+        let no_bg = ann.bounds_with_text_size(Some((110.0, 28.0)));
+        assert!(no_bg.width() < with_bg.width());
+
+        let mut shape = Annotation {
+            id: 8,
+            kind: AnnotationKind::Rectangle {
+                start: Point::new(10.0, 20.0),
+                end: Point::new(90.0, 80.0),
+                color: PALETTE[0].1,
+                stroke_width: 5.0,
+                filled: true,
+            },
+        };
+        assert!(shape.convert_shape(
+            ShapeKind::Ellipse,
+            PALETTE[1].1,
+            4.0,
+            false,
+            14,
+            false
+        ));
+        assert_eq!(
+            shape.kind,
+            AnnotationKind::Ellipse {
+                start: Point::new(10.0, 20.0),
+                end: Point::new(90.0, 80.0),
+                color: PALETTE[0].1,
+                stroke_width: 5.0,
+                filled: true,
+            }
+        );
     }
 }
