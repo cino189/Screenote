@@ -4,6 +4,8 @@ A lightweight, native Wayland, desktop-environment-agnostic screenshot and annot
 
 Works natively across **GNOME, KDE Plasma, Sway, Hyprland, and COSMIC** via `xdg-desktop-portal` (`org.freedesktop.portal.Screenshot`)—with zero GTK/Qt C header dependencies.
 
+![Screenote editor](docs/screenote%20sample.png)
+
 ## Features
 
 - **Native Wayland Capture**: Uses `xdg-desktop-portal` (`ashpd`) for compositor-native fullscreen or region selection across multi-monitor setups, or `--fullscreen` for instant full-screen capture, plus file/stdin input (`grim - | screenote -`).
